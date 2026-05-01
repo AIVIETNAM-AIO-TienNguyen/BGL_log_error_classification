@@ -8,7 +8,9 @@ Dự án này thực hiện phân loại log entries từ siêu máy tính Blue 
 - **Normal (0)**: Hệ thống hoạt động bình thường
 - **Anomaly (1)**: Hệ thống gặp lỗi (KERNDTLB, KERNSTOR, APPREAD, v.v.)
 
-Dataset gốc: [LogHub - BGL](https://github.com/logpai/loghub/tree/master)
+**Dataset**:
+- Dataset gốc: [LogHub - BGL](https://github.com/logpai/loghub/tree/master)
+- Data files (processed): [Google Drive](https://drive.google.com/drive/folders/1HbM4srHhF7NoZHQsYosuKzUkA4ioHePb)
 
 ## Cấu trúc thư mục
 
@@ -37,8 +39,7 @@ BGL_log_error_classification/
 
 ## Pipeline
 
-
-![[pipeline project.png]]
+![Pipeline Diagram](pipeline%20project.png)
 
 ### 1. Data Preparation (`1_BGL_Trimmer.ipynb`)
 
