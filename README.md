@@ -5,10 +5,12 @@ Dự án phân loại lỗi hệ thống từ log file BGL (Blue Gene/L Supercom
 ## Tổng quan
 
 Dự án này thực hiện phân loại log entries từ siêu máy tính Blue Gene/L thành hai loại:
+
 - **Normal (0)**: Hệ thống hoạt động bình thường
 - **Anomaly (1)**: Hệ thống gặp lỗi (KERNDTLB, KERNSTOR, APPREAD, v.v.)
 
 **Dataset**:
+
 - Dataset gốc: [LogHub - BGL](https://github.com/logpai/loghub/tree/master)
 - Data files (processed): [Google Drive](https://drive.google.com/drive/folders/1HbM4srHhF7NoZHQsYosuKzUkA4ioHePb)
 
@@ -52,6 +54,7 @@ head -n 1500000 BGL.log > 1_BGL_1500K_head.log
 ```
 
 **Format log gốc**:
+
 ```
 - 1117838570 2005.06.03 R02-M1-N0-C:J12-U11 2005-06-03-15.42.50.363779 R02-M1-N0-C:J12-U11 RAS KERNEL INFO instruction cache parity error corrected
 ```
@@ -61,7 +64,9 @@ head -n 1500000 BGL.log > 1_BGL_1500K_head.log
 **Các bước thực hiện**:
 
 #### 2.1. Parse log structure
+
 Sử dụng regex để tách các trường:
+
 - `Label`: Nhãn lỗi (`-` = Normal, các giá trị khác = Anomaly)
 - `Timestamp`: Unix timestamp
 - `Date`: Ngày (YYYY.MM.DD)
@@ -75,6 +80,7 @@ Sử dụng regex để tách các trường:
 #### 2.2. Phân tích dữ liệu
 
 **Phân bố nhãn**:
+
 - Normal (`-`): 1,274,306 (84.95%)
 - Anomaly: 225,694 (15.05%)
   - KERNDTLB: 152,659 (Data TLB error)
@@ -84,6 +90,7 @@ Sử dụng regex để tách các trường:
   - Các loại khác: < 1,000
 
 **Vấn đề phát hiện**:
+
 - Imbalanced dataset (tỷ lệ 85:15)
 - Cột dư thừa: `Timestamp`, `Date`, `NodeRepeat` (tương quan = 1.0)
 - 92,328 unique content messages
@@ -98,9 +105,6 @@ df = df.drop(columns=['Timestamp', 'Date', 'NodeRepeat'])
 # Chuyển đổi nhãn: '-' → 0 (Normal), còn lại → 1 (Anomaly)
 df['Label'] = df['Label'].apply(lambda x: 0 if x == '-' else 1)
 
-# Chuyển Time sang datetime
-df['Datetime'] = pd.to_datetime(df['Time'], format='%Y-%m-%d-%H.%M.%S.%f')
-df = df.drop(columns=['Time'])
 ```
 
 **Output**: `2_BGL_1500K_processed.log`
@@ -110,6 +114,7 @@ df = df.drop(columns=['Time'])
 **Brain Algorithm**: Thuật toán log parsing tự động trích xuất log templates từ raw messages.
 
 **Cấu hình**:
+
 ```python
 config = {
     "log_format": "<Label> <Node> <Time> <Type> <Component> <Level> <Content>",
@@ -124,12 +129,14 @@ config = {
 ```
 
 **Kết quả**:
+
 - **Input**: 1,500,000 log entries
 - **Output**: 227 unique templates
 - **Compression ratio**: 6,607.9x
 - **Parsing speed**: 7,228 logs/sec (~3.5 phút)
 
 **Ví dụ template**:
+
 ```
 Raw: "instruction cache parity error corrected"
 Template: E0 → ('instruction', 'cache', 'parity', 'error', 'corrected')
@@ -139,6 +146,7 @@ Template: E35 → ('generating', 'core', '<*>')
 ```
 
 **Output files**:
+
 - `BGL_1500K_processed.log_structured.csv`: Log với EventId và EventTemplate
 - `BGL_1500K_processed.log_templates.csv`: 227 templates
 - `BGL_parsed.parquet`: Định dạng nén (19.7MB)
@@ -148,14 +156,17 @@ Template: E35 → ('generating', 'core', '<*>')
 #### 4.1. Sliding Time Window
 
 **Tham số**:
+
 - Window size: 5 phút
 - Step size: 1 phút (overlap)
 
 **Labeling strategy**:
+
 - Window có ≥1 log anomaly → Label = 1
 - Window toàn log normal → Label = 0
 
 **Kết quả**:
+
 - 9,971 windows
 - Normal: 9,062 (90.9%)
 - Anomaly: 909 (9.1%)
@@ -176,6 +187,7 @@ X_tfidf = tfidf.fit_transform(X_counts)
 #### 4.3. Train/Test Split
 
 **Temporal split** (không shuffle để giữ tính thời gian):
+
 - Train: 7,976 windows (80%) - từ 2005-06-03 đến 2005-06-28
 - Test: 1,995 windows (20%) - từ 2005-06-28 đến 2005-07-04
 
@@ -192,6 +204,7 @@ X_train_smote, y_train_smote = smote.fit_resample(X_train, y_train)
 #### 4.5. Model Training
 
 **XGBoost**:
+
 ```python
 XGBClassifier(
     n_estimators=400,
@@ -204,6 +217,7 @@ XGBClassifier(
 ```
 
 **CatBoost**:
+
 ```python
 CatBoostClassifier(
     iterations=500,
@@ -218,18 +232,20 @@ CatBoostClassifier(
 ### Performance Metrics
 
 | Model    | Accuracy | Precision | Recall | F1-Score | ROC-AUC | PR-AUC |
-|----------|----------|-----------|--------|----------|---------|--------|
+| -------- | -------- | --------- | ------ | -------- | ------- | ------ |
 | XGBoost  | 96.64%   | 100%      | 54.11% | 70.22%   | 0.8960  | 0.6591 |
 | CatBoost | 96.64%   | 100%      | 54.11% | 70.22%   | 0.8429  | 0.5966 |
 
 ### Phân tích
 
 **Ưu điểm**:
+
 - Precision = 100%: Không có false positive (không báo lỗi nhầm)
 - Accuracy cao: 96.64%
 - ROC-AUC tốt: ~0.85-0.90
 
 **Hạn chế**:
+
 - Recall thấp (54.11%): Bỏ sót ~46% anomaly windows
 - Có thể do:
   - Imbalance vẫn còn sau SMOTE
@@ -274,6 +290,7 @@ jupyter notebook notebooks/4_BGL_Windowing_TFIDF_SMOTE_XGBoost_CatBoost_Colab.ip
 ### 2. Chạy trên Google Colab
 
 Tất cả notebooks đã được thiết kế để chạy trên Colab:
+
 - Mount Google Drive
 - Upload file hoặc đọc từ Drive
 - Tự động cài đặt dependencies
@@ -285,26 +302,31 @@ Nếu đã có `Brain_result/`, có thể bỏ qua bước 1-3 và chạy trực
 ## Cải tiến tiềm năng
 
 ### 1. Feature Engineering
+
 - Thêm temporal features (hour, day_of_week)
 - Sequence features (n-gram của EventId)
 - Node-based features (lỗi theo vị trí phần cứng)
 
 ### 2. Model Optimization
+
 - Hyperparameter tuning (GridSearch, Optuna)
 - Ensemble methods (stacking, voting)
 - Deep learning (LSTM, Transformer cho sequences)
 
 ### 3. Window Strategy
+
 - Thử window size khác (3 phút, 10 phút)
 - Session-based windowing (theo Node)
 - Adaptive window size
 
 ### 4. Imbalance Handling
+
 - Thử ADASYN, BorderlineSMOTE
 - Class weights trong model
 - Focal Loss
 
 ### 5. Evaluation
+
 - Cross-validation với time series split
 - Phân tích error cases
 - Feature importance analysis
